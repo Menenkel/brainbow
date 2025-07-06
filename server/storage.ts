@@ -19,6 +19,7 @@ export interface IStorage {
   // Chat methods
   createChatMessage(chatMessage: InsertChatMessage): Promise<ChatMessage>;
   getUserChatMessages(userId: number, limit?: number): Promise<ChatMessage[]>;
+  clearUserChatMessages(userId: number): Promise<void>;
   
   // Calendar methods
   createCalendarEvent(event: InsertCalendarEvent): Promise<CalendarEvent>;
@@ -99,6 +100,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(chatMessages.userId, userId))
       .orderBy(chatMessages.timestamp)
       .limit(limit);
+  }
+
+  async clearUserChatMessages(userId: number): Promise<void> {
+    await db
+      .delete(chatMessages)
+      .where(eq(chatMessages.userId, userId));
   }
 
   async createCalendarEvent(insertEvent: InsertCalendarEvent): Promise<CalendarEvent> {

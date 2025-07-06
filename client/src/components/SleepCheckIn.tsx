@@ -44,6 +44,16 @@ export function SleepCheckIn() {
     }
   });
 
+  // Set form values when data is loaded - MOVED TO TOP TO FIX HOOK ORDER
+  useEffect(() => {
+    if (todaySleepData) {
+      setSleepQuality(todaySleepData.sleepQuality);
+      setSleepHours(todaySleepData.sleepHours.toString());
+      setWakeUpTime(todaySleepData.wakeUpTime || "");
+      setNotes(todaySleepData.notes || "");
+    }
+  }, [todaySleepData]);
+
   const sleepMutation = useMutation({
     mutationFn: async (sleepData: {
       date: string;
@@ -104,16 +114,6 @@ export function SleepCheckIn() {
   }
 
   const alreadyCompleted = todaySleepData !== null;
-
-  // Set form values when data is loaded
-  useEffect(() => {
-    if (todaySleepData) {
-      setSleepQuality(todaySleepData.sleepQuality);
-      setSleepHours(todaySleepData.sleepHours.toString());
-      setWakeUpTime(todaySleepData.wakeUpTime || "");
-      setNotes(todaySleepData.notes || "");
-    }
-  }, [todaySleepData]);
 
   // Show minimized view only when minimized AND there's existing data
   if (isMinimized && alreadyCompleted) {

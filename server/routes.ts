@@ -1,15 +1,128 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { getChatResponse, generateDailyPlan, getAnxietySupport, generateAffirmation, generateSwotAnalysis, planDay } from "./services/groq";
-import { syncGoogleCalendarEvents, isGoogleCalendarConfigured, getAuthorizationUrl } from "./services/googleCalendar";
+import { getChatResponse, generateSwotAnalysis, getAnxietySupport, generateDailyPlan, planDay, generateAffirmation } from "./services/groq";
+import { syncGoogleCalendarEvents, isGoogleCalendarConfigured, getAuthorizationUrl, exchangeCodeForTokens } from "./services/googleCalendar";
 import { insertMoodSchema, insertChatMessageSchema, insertCalendarEventSchema, insertTaskSchema, insertWellnessActivitySchema } from "@shared/schema";
+import type { CalendarEvent } from "@shared/schema";
 import fetch from "node-fetch";
+
+// Enhanced message context function
+async function enhanceMessageWithContext(message: string, userId: number): Promise<string> {
+  try {
+    // Get fresh user data
+    const today = new Date().toISOString().split('T')[0];
+    const [moodData, sleepData, calendarEvents] = await Promise.all([
+      storage.getUserMoods(userId, 5),
+      storage.getUserSleepData(userId, today),
+      storage.getUserCalendarEvents(userId),
+    ]);
+
+    // Get today's events
+    const todayEvents = calendarEvents.filter((event: CalendarEvent) => 
+      new Date(event.startTime).toISOString().split('T')[0] === today
+    );
+
+    // Get upcoming events (next 4 hours)
+    const now = new Date();
+    const upcomingEvents = calendarEvents.filter((event: CalendarEvent) => {
+      const eventStart = new Date(event.startTime);
+      const timeDiff = eventStart.getTime() - now.getTime();
+      return timeDiff > 0 && timeDiff <= 4 * 60 * 60 * 1000; // Next 4 hours
+    });
+
+    // Format context information
+    let contextInfo = `\n\n=== USER CONTEXT ===\n`;
+    
+    // Current mood context
+    if (moodData.length > 0) {
+      const latestMood = moodData[0];
+      const moodText = latestMood.mood === '😰' ? 'anxious' : 
+                     latestMood.mood === '😊' ? 'happy' : 
+                     latestMood.mood === '😤' ? 'frustrated' : 
+                     latestMood.mood === '😴' ? 'tired' : 'neutral';
+      contextInfo += `Current mood: ${moodText} (${latestMood.mood})\n`;
+      
+      // Parse mood context if available
+      try {
+        const moodContext = JSON.parse(latestMood.context || '{}');
+        if (moodContext.type) {
+          contextInfo += `Mood context: ${moodContext.type}\n`;
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+
+    // Sleep context
+    if (sleepData) {
+      contextInfo += `Sleep: ${sleepData.sleepHours} hours of ${sleepData.sleepQuality} quality sleep\n`;
+      if (sleepData.wakeUpTime) {
+        contextInfo += `Wake up time: ${sleepData.wakeUpTime}\n`;
+      }
+    }
+
+    // Calendar context - be specific about events
+    if (todayEvents.length > 0) {
+      contextInfo += `\nToday's Events:\n`;
+      todayEvents.forEach((event: CalendarEvent) => {
+        const startTime = new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const endTime = new Date(event.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        contextInfo += `- ${startTime}-${endTime}: "${event.title}"`;
+        if (event.description) {
+          contextInfo += ` (${event.description.substring(0, 100)}...)`;
+        }
+        contextInfo += `\n`;
+      });
+    }
+
+    // Upcoming events context
+    if (upcomingEvents.length > 0) {
+      contextInfo += `\nUpcoming Events (next 4 hours):\n`;
+      upcomingEvents.forEach((event: CalendarEvent) => {
+        const startTime = new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeUntil = Math.round((new Date(event.startTime).getTime() - now.getTime()) / (1000 * 60));
+        contextInfo += `- "${event.title}" in ${timeUntil} minutes (${startTime})`;
+        if (event.description) {
+          contextInfo += ` - ${event.description.substring(0, 50)}...`;
+        }
+        contextInfo += `\n`;
+      });
+    }
+
+    // Time context
+    const currentTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const currentDate = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    contextInfo += `\nCurrent time: ${currentTime} on ${currentDate}\n`;
+
+    contextInfo += `=== END CONTEXT ===\n\n`;
+
+    // Enhanced message with specific instructions for contextual responses
+    const enhancedMessage = `${contextInfo}User message: "${message}"
+
+IMPORTANT INSTRUCTIONS:
+1. If the user mentions feeling stressed, anxious, or overwhelmed, immediately offer specific stress management techniques
+2. If upcoming calendar events are mentioned or you see stressful events coming up, provide preparation strategies
+3. Reference specific event titles and times when giving advice (e.g., "For your 'Team Meeting' at 2:00 PM...")
+4. Consider sleep quality when making energy-related suggestions
+5. Be proactive - if you notice patterns that might cause stress, address them
+6. Offer concrete, actionable advice rather than generic responses
+7. If the user's mood seems negative and they have upcoming events, help them prepare mentally
+8. Always acknowledge the specific context (mood, sleep, events) in your response
+
+Respond as a caring, proactive AI companion who pays attention to details and provides personalized stress management advice.`;
+
+    return enhancedMessage;
+  } catch (error) {
+    console.error('Error enhancing message context:', error);
+    return message;
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const DEFAULT_USER_ID = 1; // Using default user for demo
 
-  // Chat endpoints
+  // Chat endpoint with enhanced context
   app.post("/api/chat", async (req, res) => {
     try {
       const { message } = req.body;
@@ -17,29 +130,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Message is required" });
       }
 
-      // Get relevant calendar events for AI context (rest of today + tomorrow)
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const endOfTomorrow = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate() + 1);
-      const calendarEvents = await storage.getUserCalendarEvents(DEFAULT_USER_ID, now, endOfTomorrow);
-
-      // Get current tasks for AI context
-      const tasks = await storage.getUserTasks(DEFAULT_USER_ID);
-
-      // Get recent chat history for context
-      const recentMessages = await storage.getUserChatMessages(DEFAULT_USER_ID, 5);
-      const context = recentMessages
-        .map(m => `User: ${m.message}\nAI: ${m.response}`)
-        .join('\n');
-
-      // Note: getChatResponse expects (message, calendarEvents?, tasks?, context?)
-      const response = await getChatResponse(message, calendarEvents, tasks, context);
+      // Enhanced message with comprehensive context
+      const enhancedMessage = await enhanceMessageWithContext(message, DEFAULT_USER_ID);
       
-      // Save the chat message
+      const response = await getChatResponse(enhancedMessage);
+      
+      // Store the original message and response
       await storage.createChatMessage({
         userId: DEFAULT_USER_ID,
-        message,
-        response
+        message: message,
+        response: response,
       });
 
       res.json({ response });
@@ -56,6 +156,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Chat history error:", error);
       res.status(500).json({ error: "Failed to fetch chat history" });
+    }
+  });
+
+  app.post("/api/chat/reset", async (req, res) => {
+    try {
+      await storage.clearUserChatMessages(DEFAULT_USER_ID);
+      res.json({ success: true, message: "Chat history reset successfully" });
+    } catch (error) {
+      console.error("Chat reset error:", error);
+      res.status(500).json({ error: "Failed to reset chat history" });
     }
   });
 
@@ -399,8 +509,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Emotion, sleep quality, and weather are required" });
       }
 
-      const planResponse = await planDay(emotion, sleepQuality, weather, events || []);
-      res.json(planResponse);
+      const plan = await planDay(emotion, sleepQuality, weather, events);
+      res.json(plan);
     } catch (error) {
       console.error("Plan day error:", error);
       res.status(500).json({ error: "Failed to generate daily plan" });
@@ -435,14 +545,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Authorization code required" });
       }
       
-      const { exchangeCodeForTokens } = await import("./services/googleCalendar");
-      const success = await exchangeCodeForTokens(authCode);
-      
-      if (success) {
-        res.json({ success: true, message: "Google Calendar authorized successfully!" });
-      } else {
-        res.status(400).json({ error: "Failed to authorize Google Calendar" });
-      }
+      const tokens = await exchangeCodeForTokens(authCode);
+      res.json({ success: true, tokens });
     } catch (error) {
       console.error("Google Calendar authorization error:", error);
       res.status(500).json({ error: "Failed to process authorization" });
@@ -458,31 +562,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const googleEvents = await syncGoogleCalendarEvents(startDate, endDate);
       
       // Get existing Google Calendar events from database
-      const existingGoogleEvents = await storage.getUserGoogleCalendarEvents(DEFAULT_USER_ID);
+      const existingEvents = await storage.getUserGoogleCalendarEvents(DEFAULT_USER_ID);
       
-      // Create a set of current Google Calendar event IDs
-      const currentGoogleEventIds = new Set(googleEvents.map(event => event.googleId));
-      
-      // Find events that exist in database but not in Google Calendar (deleted events)
-      const eventsToDelete = existingGoogleEvents.filter(
-        dbEvent => dbEvent.googleId && !currentGoogleEventIds.has(dbEvent.googleId)
-      );
-      
-      // Delete events that no longer exist in Google Calendar
-      let deletedCount = 0;
-      for (const eventToDelete of eventsToDelete) {
-        try {
-          if (eventToDelete.googleId) {
-            const deleted = await storage.deleteGoogleCalendarEventByGoogleId(eventToDelete.googleId);
-            if (deleted) deletedCount++;
-          }
-        } catch (error) {
-          console.error(`Failed to delete event: ${eventToDelete.title}`, error);
-        }
-      }
-      
-      // Save/update synced events in database
-      const savedEvents = [];
+      // Sync each Google Calendar event to database
+      let syncedCount = 0;
       for (const event of googleEvents) {
         try {
           const savedEvent = await storage.upsertGoogleCalendarEvent({
@@ -495,23 +578,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: event.type,
             googleId: event.googleId
           });
-          savedEvents.push(savedEvent);
+          syncedCount++;
         } catch (error) {
           console.error(`Failed to sync event: ${event.title}`, error);
         }
       }
 
-      const responseMessage = deletedCount > 0 
-        ? `Synced ${savedEvents.length} events, deleted ${deletedCount} removed events`
-        : `Synced ${savedEvents.length} events`;
+      const responseMessage = syncedCount > 0 
+        ? `Synced ${syncedCount} events`
+        : `No new events to sync`;
       
       console.log(responseMessage);
 
       res.json({ 
-        synced: savedEvents.length, 
+        synced: syncedCount, 
         total: googleEvents.length,
-        deleted: deletedCount,
-        events: savedEvents,
+        events: googleEvents,
         message: responseMessage
       });
     } catch (error) {
