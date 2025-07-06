@@ -36,7 +36,7 @@ export function AutoDayPlanner() {
   });
 
   // Get latest mood for emotional state
-  const { data: moods = [] } = useQuery<any[]>({
+  const { data: moods = [], refetch: refetchMood } = useQuery<any[]>({
     queryKey: ["/api/mood"],
   });
 
@@ -130,20 +130,79 @@ Please provide structured guidance for optimizing this day.`;
     sendChatMessage(contextMessage);
   };
 
+  const getMostRecentEmotion = () => {
+    if (!moods || !Array.isArray(moods) || moods.length === 0) {
+      return null;
+    }
+    
+    const recentMood = moods[moods.length - 1];
+    const moodEmoji = recentMood?.mood;
+    
+    // Map emojis to text for better AI processing
+    const emojiToText: Record<string, string> = {
+      '😊': 'happy',
+      '😴': 'tired', 
+      '😰': 'anxious',
+      '😤': 'stressed',
+      '🔥': 'motivated',
+      '😢': 'sad',
+      '😌': 'calm',
+      '🎉': 'excited'
+    };
+    
+    return emojiToText[moodEmoji] || moodEmoji || 'neutral';
+  };
+
+  const enhanceMessageWithContext = (message: string, context: AutoPlanRequest) => {
+    const emotion = context.emotion || getMostRecentEmotion();
+    const hasCalendarEvents = context.calendarEvents && context.calendarEvents.length > 0;
+    const sleepInfo = context.sleepQuality ? `Sleep: ${context.sleepQuality} (${context.sleepHours}h)` : "";
+    const weatherInfo = context.weather ? `Weather: ${context.weather.description}, ${context.weather.temperature}°C` : "";
+    
+    // Format calendar events with actual details
+    let calendarInfo = "";
+    if (hasCalendarEvents && context.calendarEvents) {
+      const eventsList = context.calendarEvents.map((event: any) => {
+        const startTime = event.startTime ? new Date(event.startTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
+        const endTime = event.endTime ? new Date(event.endTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
+        const timeRange = startTime && endTime ? `${startTime}-${endTime}` : startTime || '';
+        const description = event.description ? event.description.substring(0, 100) + '...' : '';
+        return `  - ${timeRange}: ${event.title}${description ? ' (' + description + ')' : ''}`;
+      }).join('\n');
+      
+      calendarInfo = `• Today's Calendar Events (${context.calendarEvents.length}):\n${eventsList}`;
+    }
+
+    const contextualInfo = [
+      emotion ? `• Current Emotion: ${emotion}` : '',
+      sleepInfo ? `• ${sleepInfo}` : '',
+      weatherInfo ? `• ${weatherInfo}` : '',
+      calendarInfo
+    ].filter(Boolean).join('\n');
+
+    return contextualInfo ? `${message}\n\nContext:\n${contextualInfo}` : message;
+  };
+
   const sendChatMessage = async (message: string) => {
-    const context = {
+    // Get fresh mood data before sending
+    await refetchMood();
+    
+    const context: AutoPlanRequest = {
+      emotion: getMostRecentEmotion(),
       calendarEvents: todayEvents,
-      currentTime: new Date().toISOString(),
-      sleepData: todaySleepData,
-      emotionalState: moods.find((mood: any) => {
+      sleepQuality: todaySleepData?.sleepQuality,
+      sleepHours: todaySleepData?.sleepHours,
+      weather: moods.find((mood: any) => {
         const context = mood.context ? JSON.parse(mood.context) : null;
         return context?.type === "emotional_state";
-      })
+      })?.weather, // Assuming weather is part of the mood context
+      currentTime: new Date().toISOString()
     };
 
+    const enhancedMessage = enhanceMessageWithContext(message, context);
+    
     chatMutation.mutate({ 
-      message, 
-      context: JSON.stringify(context)
+      message: enhancedMessage
     });
   };
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,16 +41,6 @@ export function SleepCheckIn() {
         throw new Error('Failed to fetch sleep data');
       }
       return response.json();
-    }
-  });
-
-  // Set form values when data is loaded
-  useState(() => {
-    if (todaySleepData) {
-      setSleepQuality(todaySleepData.sleepQuality);
-      setSleepHours(todaySleepData.sleepHours.toString());
-      setWakeUpTime(todaySleepData.wakeUpTime || "");
-      setNotes(todaySleepData.notes || "");
     }
   });
 
@@ -115,8 +105,18 @@ export function SleepCheckIn() {
 
   const alreadyCompleted = todaySleepData !== null;
 
-  // Show minimized view after completion
-  if (isMinimized || alreadyCompleted) {
+  // Set form values when data is loaded
+  useEffect(() => {
+    if (todaySleepData) {
+      setSleepQuality(todaySleepData.sleepQuality);
+      setSleepHours(todaySleepData.sleepHours.toString());
+      setWakeUpTime(todaySleepData.wakeUpTime || "");
+      setNotes(todaySleepData.notes || "");
+    }
+  }, [todaySleepData]);
+
+  // Show minimized view only when minimized AND there's existing data
+  if (isMinimized && alreadyCompleted) {
     return (
       <Card className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/50 dark:to-purple-950/50 border-blue-200 dark:border-blue-800">
         <CardHeader className="pb-2">
@@ -130,18 +130,27 @@ export function SleepCheckIn() {
               variant="ghost"
               size="sm"
               onClick={() => setIsMinimized(false)}
-              className="h-8 px-2 text-xs"
+              className="h-8 px-2 text-xs hover:bg-blue-100 dark:hover:bg-blue-900/50"
             >
               Edit
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent className="py-3">
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>✓ Quality: {todaySleepData?.sleepQuality || sleepQuality}</p>
-            <p>✓ Hours: {todaySleepData?.sleepHours || sleepHours}</p>
-            {(todaySleepData?.wakeUpTime || wakeUpTime) && (
-              <p>✓ Wake Time: {todaySleepData?.wakeUpTime || wakeUpTime}</p>
+        <CardContent className="pb-3">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-blue-700 dark:text-blue-300">Quality:</span>
+              <span className="ml-2 capitalize text-blue-800 dark:text-blue-200">{todaySleepData?.sleepQuality}</span>
+            </div>
+            <div>
+              <span className="font-medium text-blue-700 dark:text-blue-300">Hours:</span>
+              <span className="ml-2 text-blue-800 dark:text-blue-200">{todaySleepData?.sleepHours}h</span>
+            </div>
+            {todaySleepData?.wakeUpTime && (
+              <div>
+                <span className="font-medium text-blue-700 dark:text-blue-300">Wake Time:</span>
+                <span className="ml-2 text-blue-800 dark:text-blue-200">{todaySleepData.wakeUpTime}</span>
+              </div>
             )}
           </div>
         </CardContent>
