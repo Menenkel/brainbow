@@ -1,0 +1,26 @@
+Brainbow Data Backup
+Created: Sun Jul  6 22:37:22 EDT 2025
+Server Status: Running ✅
+Database: Supabase PostgreSQL
+
+Data Summary:
+- Mood entries: 3
+- Chat messages: 3  
+- Calendar events: 10
+- Sleep data: Backed up
+
+Files included:
+- moods.json
+- chat_history.json
+- calendar_events.json
+- sleep_data.json
+- .env (database credentials)
+- schema.ts (database structure)
+- drizzle.config.ts (database config)
+
+To restore from this backup:
+1. Create new Supabase project
+2. Update .env with new DATABASE_URL
+3. Run: npm run db:push
+4. Import data via API calls
+

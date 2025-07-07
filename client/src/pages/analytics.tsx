@@ -1,8 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Calendar, TrendingUp, RefreshCw } from "lucide-react";
+import { Heart, Calendar, TrendingUp, RefreshCw, Trash2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Mood {
   id: number;
@@ -13,10 +25,40 @@ interface Mood {
 }
 
 export default function Analytics() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const { data: moods = [], isLoading, refetch } = useQuery<Mood[]>({
     queryKey: ["/api/mood"],
     staleTime: 0, // Always consider data stale to ensure fresh fetches
     refetchOnWindowFocus: true, // Refetch when window gains focus
+  });
+
+  // Reset analytics mutation
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/mood/reset", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to reset analytics data");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mood"] });
+      toast({
+        title: "Analytics Reset",
+        description: "All mood data has been cleared successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Reset Failed",
+        description: "Failed to reset analytics data. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Get last 7 days of moods for weekly summary
@@ -108,16 +150,49 @@ export default function Analytics() {
               Track your emotional patterns and trends over time
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Reset Data
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset Analytics Data</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all your mood entries and emotional data. 
+                    This action cannot be undone. Are you sure you want to continue?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => resetMutation.mutate()}
+                    disabled={resetMutation.isPending}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    {resetMutation.isPending ? "Resetting..." : "Reset Data"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

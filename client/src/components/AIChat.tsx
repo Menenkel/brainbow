@@ -96,8 +96,8 @@ export function AIChat() {
               <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center flex-shrink-0">
                 <Bot className="text-white h-3 w-3" />
               </div>
-              <div className="bg-neutral-100 dark:bg-gray-700 rounded-2xl rounded-tl-md p-3 max-w-xs">
-                <p className="text-sm text-neutral-700 dark:text-gray-300">
+              <div className="bg-neutral-100 dark:bg-gray-700 rounded-2xl rounded-tl-md p-3 w-4/5">
+                <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap break-words">
                   Hi! I'm here to help you plan your day and manage stress. What would you like to focus on today?
                 </p>
               </div>
@@ -107,8 +107,8 @@ export function AIChat() {
               <div key={chat.id} className="space-y-3">
                 {/* User Message */}
                 <div className="flex items-start space-x-3 justify-end">
-                  <div className="bg-primary rounded-2xl rounded-tr-md p-3 max-w-xs">
-                    <p className="text-sm text-white">{chat.message}</p>
+                  <div className="bg-primary rounded-2xl rounded-tr-md p-3 w-4/5">
+                    <p className="text-sm text-white whitespace-pre-wrap break-words">{chat.message}</p>
                     <span className="text-xs text-primary-200 mt-1 block">
                       {formatTime(chat.timestamp)}
                     </span>
@@ -123,8 +123,8 @@ export function AIChat() {
                   <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center flex-shrink-0">
                     <Bot className="text-white h-3 w-3" />
                   </div>
-                  <div className="bg-neutral-100 dark:bg-gray-700 rounded-2xl rounded-tl-md p-3 max-w-xs">
-                    <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap">{chat.response}</p>
+                  <div className="bg-neutral-100 dark:bg-gray-700 rounded-2xl rounded-tl-md p-3 w-4/5">
+                    <p className="text-sm text-neutral-700 dark:text-gray-300 whitespace-pre-wrap break-words">{chat.response}</p>
                   </div>
                 </div>
               </div>
@@ -134,8 +134,8 @@ export function AIChat() {
           {/* Show pending message immediately */}
           {pendingMessage && (
             <div className="flex items-start space-x-3 justify-end">
-              <div className="bg-primary rounded-2xl rounded-tr-md p-3 max-w-xs">
-                <p className="text-sm text-white">{pendingMessage}</p>
+              <div className="bg-primary rounded-2xl rounded-tr-md p-3 w-4/5">
+                <p className="text-sm text-white whitespace-pre-wrap break-words">{pendingMessage}</p>
                 <span className="text-xs text-primary-200 mt-1 block">
                   {formatTime(new Date())}
                 </span>
@@ -152,7 +152,7 @@ export function AIChat() {
               <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center flex-shrink-0">
                 <Bot className="text-white h-3 w-3" />
               </div>
-              <div className="bg-neutral-100 dark:bg-gray-700 rounded-2xl rounded-tl-md p-3 max-w-xs">
+              <div className="bg-neutral-100 dark:bg-gray-700 rounded-2xl rounded-tl-md p-3 w-auto">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-neutral-400 dark:bg-gray-500 rounded-full animate-bounce"></div>
                   <div className="w-2 h-2 bg-neutral-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>

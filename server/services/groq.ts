@@ -56,7 +56,7 @@ async function callGroqAPI(messages: any[], temperature = 0.7, model = "llama3-8
       model,
       messages,
       temperature,
-      max_tokens: 1024
+      max_tokens: 200  // Reasonable limit for concise but complete responses
     })
   });
 
@@ -97,7 +97,8 @@ export async function getChatResponse(message: string, calendarEvents?: any[], t
               minute: '2-digit', 
               hour12: true 
             });
-            return `- ${dayPrefix}${event.title} (${startTime} - ${endTime})${event.location ? ` at ${event.location}` : ''}`;
+            const movable = event.movabilityStatus === 'movable' ? ' [MOVABLE]' : ' [FIXED]';
+            return `- ${dayPrefix}${event.title} (${startTime} - ${endTime})${movable}${event.location ? ` at ${event.location}` : ''}`;
           }).join('\n')}`
       : '';
 
@@ -108,27 +109,56 @@ export async function getChatResponse(message: string, calendarEvents?: any[], t
         ).join('\n')}`
       : '';
 
-    const systemPrompt = `You are Brainbow, a caring AI assistant focused on personal wellness, productivity, and emotional support. 
-    
-    You help users:
-    - Manage their daily tasks and calendar
-    - Provide emotional support and anxiety management
-    - Suggest wellness activities and mindfulness exercises
-    - Give practical life advice with empathy
-    
-    Always be supportive, empathetic, and practical. Consider the user's calendar and tasks when giving advice.
-    
-    Current context: ${context || 'General conversation'}${eventsContext}${tasksContext}`;
+    const systemPrompt = `You are the user's daily companion - a caring, intuitive friend who helps them structure their day perfectly. 
+
+🌟 CORE PERSONALITY:
+- Speak naturally and conversationally (like texting a close friend)
+- Use emojis naturally but sparingly (1-2 per response)
+- Show genuine care and empathy
+- Be encouraging but realistic
+
+💡 PRIMARY MISSION:
+- Help structure and organize their day based on mood, energy, and schedule
+- Suggest optimal timing for tasks based on their current state
+- Recommend moving MOVABLE calendar events to optimize their day
+- Provide gentle guidance on pacing and energy management
+
+🎯 RESPONSE GUIDELINES:
+- Keep responses concise but conversational (2-4 sentences)
+- Focus on ONE specific actionable suggestion
+- Reference specific event names and times when relevant
+- End with a question or next step to encourage engagement
+
+RESPONSE FORMAT:
+- Give specific, actionable advice about their schedule
+- Mention exact event names and suggested times
+- Consider their mood, energy levels, and conflicts
+- Be supportive and understanding
+
+Current context: ${context || 'Daily conversation'}${eventsContext}${tasksContext}
+
+Remember: You're their friend who's excellent at day planning. Be natural, caring, and focus on making their day flow smoothly with specific, actionable advice.`;
 
     const response = await callGroqAPI([
       { role: "system", content: systemPrompt },
       { role: "user", content: message }
-    ], 0.7);
+    ], 0.3, "llama3-8b-8192"); // Lower temperature, more focused model
 
-    return response.choices[0].message.content || "I'm here to help! Could you please rephrase your question?";
+    const rawResponse = response.choices[0].message.content || "I'm here for you! What's on your mind today? 💙";
+    
+    // Light truncation for readability in chat - max 150 words
+    const words = rawResponse.trim().split(/\s+/);
+    const maxWords = 150;
+    
+    if (words.length > maxWords) {
+      const truncatedWords = words.slice(0, maxWords);
+      return truncatedWords.join(' ') + '...';
+    }
+
+    return rawResponse;
   } catch (error) {
     console.error("Groq chat error:", error);
-    return "I'm having trouble connecting right now. In the meantime, try taking a few deep breaths and remember that you've got this! 💪";
+    return "I'm having trouble connecting right now, but I'm here for you! 💙 Try taking a deep breath - we'll figure this out together.";
   }
 }
 

@@ -2,6 +2,7 @@ import { TodaySchedule } from "@/components/TodaySchedule";
 import { SleepCheckIn } from "@/components/SleepCheckIn";
 import { EmotionalStateUpdate } from "@/components/EmotionalStateUpdate";
 import { AutoDayPlanner } from "@/components/AutoDayPlanner";
+import { WeatherWidget } from "@/components/WeatherWidget";
 import { Navbar } from "@/components/Navbar";
 import { useCalendarSync } from "@/hooks/use-calendar-sync";
 
@@ -20,22 +21,29 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Weather Widget - Full Width at Top */}
+        <div className="mb-6 animate-fade-in-up">
+          <WeatherWidget />
+        </div>
+
         {/* Split Check-In - Sleep & Emotional State */}
         <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up">
           <SleepCheckIn />
           <EmotionalStateUpdate />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
           {/* Left Column: Calendar & Schedule */}
-          <div className="lg:col-span-2 space-y-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+          <div className="lg:col-span-2 space-y-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }} id="schedule-column">
             <TodaySchedule />
           </div>
 
-          {/* Right Column: AI Planning & Chat */}
+          {/* Right Column: AI Planning - Height constrained to match left column */}
           <div className="lg:col-span-1 space-y-6 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <AutoDayPlanner />
+            <div className="sticky top-6">
+              <AutoDayPlanner scheduleColumnId="schedule-column" />
+            </div>
           </div>
         </div>
       </div>
