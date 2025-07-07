@@ -71,4 +71,5 @@ coverage/
 *.tmp
 *.temp
 tmp/
-temp/ .env.backup.*
+temp/
+.env.backup.*
