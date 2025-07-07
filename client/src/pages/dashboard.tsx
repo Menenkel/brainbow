@@ -1,39 +1,17 @@
-import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TodaySchedule } from "@/components/TodaySchedule";
 import { SleepCheckIn } from "@/components/SleepCheckIn";
 import { EmotionalStateUpdate } from "@/components/EmotionalStateUpdate";
 import { AutoDayPlanner } from "@/components/AutoDayPlanner";
 import { Navbar } from "@/components/Navbar";
-import { apiRequest } from "@/lib/queryClient";
+import { useCalendarSync } from "@/hooks/use-calendar-sync";
 
 export default function Dashboard() {
-  const queryClient = useQueryClient();
-
-  // Check Google Calendar status
-  const { data: calendarStatus } = useQuery<{ configured: boolean }>({
-    queryKey: ['/api/google-calendar/status'],
+  // Initialize calendar sync with auto-sync enabled and periodic sync every 30 minutes
+  const { isSync, isConfigured } = useCalendarSync({
+    enableAutoSync: true,
+    syncInterval: 30,
+    showToasts: true
   });
-
-  // Auto-sync Google Calendar when app opens
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest('POST', '/api/google-calendar/sync', {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar/events'] });
-    },
-    onError: (error) => {
-      console.log('Calendar sync failed:', error);
-    }
-  });
-
-  // Automatically sync calendar on component mount if configured
-  useEffect(() => {
-    if (calendarStatus?.configured && !syncMutation.isPending) {
-      syncMutation.mutate();
-    }
-  }, [calendarStatus?.configured]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-100 dark:from-gray-900 dark:to-blue-900/20">
